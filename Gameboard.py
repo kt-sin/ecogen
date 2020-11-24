@@ -41,8 +41,13 @@ class MapTile(object):                       #The main class for stationary thin
         self.Type = 'Tile'
         self.Cover = False
         self.Color = self.get_color()
+        self.HP = 10
+        self.Energy = 100
+        self.Status = 'ALIVE'
+        self.collection = []
         if Name != 'BARE' and Name != 'GRASS':
             self.Type = Name
+            self.collection.append(9)
             self.Name = self.get_random_instance(self.Type)
 
     def get_nutrients(self):
@@ -107,9 +112,29 @@ class MapTile(object):                       #The main class for stationary thin
 
     def uptake(self):
         soil = Map.Grid[self.Column][self.Row][0]
-        if self.Type == 'PLANT' or self.Type == 'TREE':
+        if (self.Type == 'PLANT' or self.Type == 'TREE') and len(soil.Nutrients) > 0 and self.collection.count(9) > 0:
             uptake = soil.Nutrients.pop()
-            print('On the uptake: ' + self.Name + ' : ' + str(uptake))
+            print('On the uptake: ' + self.Name + str(self.Column) + str(self.Row) + ' : ' + str(uptake))
+            self.collection.append(uptake)
+            self.collection.append(9)
+        if (len(soil.Nutrients))<1 or self.collection.count(9) < 1:
+            self.decay()
+
+    def decay(self):
+        self.HP-=1
+        self.Energy -=1
+        print (self.Name + "has decayed at " + str(self.Column) + ', ' + str(self.Row))
+        if self.HP == 0:
+            self.die()
+
+    def die(self):
+        x = self.Column
+        y = self.Row
+        #spot = Map.Grid[x][y]
+        print(self.Name + ' has died! At ' + str(self.Column) + ', ' + str(self.Row))
+        self.Status = 'DEAD'
+        #(Map.Grid[self.Column][self.Row]).remove(spot[1])
+        #Map.Plants.remove(Map.Plants[x][y])
 
     def report_nutrients(self):
         nutes = self.Nutrients
@@ -117,17 +142,20 @@ class MapTile(object):                       #The main class for stationary thin
         nute_report = []
         total = len(nutes)
         unique = len(s)
-        biggest = max(nutes)
-        def sorter(x):
-            return x[2]
+        if total > 0:
+            biggest = max(nutes)
+            def sorter(x):
+                return x[2]
 
-        nute_report.append('Total: ' + str(total) + '| Unique: ' + str(unique) + '| Longest: ' + str(biggest))
-        for n in s:
-            x = nutes.count(n)
-            freq = x/total
-            freq = "{:.2f}".format(freq)
-            nute_report.append([n,x,freq])
-        nute_report.sort(key=sorter)
+            nute_report.append('Total: ' + str(total) + '| Unique: ' + str(unique) + '| Longest: ' + str(biggest))
+            for n in s:
+                x = nutes.count(n)
+                freq = x/total
+                freq = "{:.2f}".format(freq)
+                nute_report.append([n,x,freq])
+            nute_report.sort(key=sorter)
+        else:
+            nute_report = 'Nothing here.'
         return nute_report
 
 
@@ -346,6 +374,7 @@ class Map(object):              #The main class; where the action happens
 
     Grid = []
     Orgs = []
+    Plants = []
 
     def get_random_type():
         obstacles = ['BARE', 'GRASS']
@@ -372,11 +401,13 @@ class Map(object):              #The main class; where the action happens
     for i in range(40):          #Placing Random trees
         RandomRow = random.randint(0, MapSize - 1)
         RandomColumn = random.randint(0, MapSize - 1)
-        RandomThing = random.randint(0,len(stuff)-1)
-        TempTile = MapTile(stuff[RandomThing], RandomColumn, RandomRow)
+        RandomThing = stuff[(random.randint(0,len(stuff)-1))]
+        TempTile = MapTile(RandomThing, RandomColumn, RandomRow)
         g = Grid[RandomColumn][RandomRow]
         if len(g) < 2:
             g.append(TempTile)
+            if RandomThing == 'PLANT':
+                Plants.append(TempTile)
 
     for i in range(20):
         seek = True
@@ -410,8 +441,8 @@ class Map(object):              #The main class; where the action happens
                         Map.Grid[Column][Row].remove(Map.Grid[Column][Row][i])
                     elif Map.Grid[Column][Row][i].Type == "Organism":
                         Map.Grid[Column][Row].remove(Map.Grid[Column][Row][i])
-                    elif Map.Grid[Column][Row][i].Type == "PLANT":
-                        (Map.Grid[Column][Row])[i].uptake()
+                    elif Map.Grid[Column][Row][i].Type == "PLANT" and Map.Grid[Column][Row][i].Status == "DEAD":
+                        (Map.Grid[Column][Row]).remove(Map.Grid[Column][Row][i])
         Map.Grid[int(Map.Hero.Column)][int(Map.Hero.Row)].append(Map.Hero)
         for o in Map.Orgs:
             Map.Grid[int(o.Column)][int(o.Row)].append(o)
@@ -445,13 +476,16 @@ while not Done:
                             if (cell.Type == 'Tile'):
                                 r = cell.report_nutrients()
                                 print(str(r[0]))
-                                for i in range(1,len(r)):
+                                print('HP: ' + str(cell.HP) + ' | E: ' + str(cell.Energy) + ' | Collected: ' + str(len(cell.collection)))
+                                for i in range(1,len(r)-1):
                                     print(str(r[i][0]) + ' count: ' + str(r[i][1]) + 'freq: ' + str(r[i][2]))
                             elif cell.Type == "Organism" or cell.Name == "Hero":
                                 print('Age: ' + str(cell.Age) + '| Energy: ' + str(cell.Energy) + 'HP: ' + str(cell.HP))#print stuff that inhabits that square
 
         elif event.type == pygame.KEYDOWN:
             Map.Hero.Move(KeyLookup[event.key])
+            for p in Map.Plants:
+                p.uptake()
             ranDir = ''
             for o in Map.Orgs:
                 o.detect_env()
